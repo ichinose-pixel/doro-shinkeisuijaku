@@ -447,16 +447,18 @@ function layout(){
  }
  updatePhotoMatte();
 }
+function activeGuide(){
+ if(state.tutorial>=3||!state.live.length)return null;
+ return Pai.hint(state.live)||null;
+}
 function updateGuide(){
  const box=$('guide'),active=state.tutorial<3&&state.live.length>0;
  box.hidden=!active;
  box.parentElement.classList.toggle('with-guide',active);
  if(!active)return [];
- const picked=state.live.find(t=>t.id===state.chosen);
- const mate=picked&&state.live.find(t=>t.id!==picked.id&&t.symbol===picked.symbol);
- const next=mate&&Pai.available(mate,state.live)?[mate]:picked?[]:(Pai.hint(state.live)||[]);
- box.firstElementChild.textContent=state.guideNotice||(next.length===1?'もう片方の金枠をタップ':picked?'もう片方はまだ取れません':'金枠の同じ牌を2つタップ');
- box.lastElementChild.textContent=state.guideNotice?'上に牌がなく、左右どちらかが空いた牌が取れます':next.length===1?'練習 '+(state.tutorial+1)+' / 3':picked?'選んだ牌をもう一度押すと解除':state.tutorial===2?'上と、左右どちらかが空いた牌を取れます':'練習 '+(state.tutorial+1)+' / 3';
+ const next=(activeGuide()||[]).filter(t=>t.id!==state.chosen);
+ box.firstElementChild.textContent=state.guideNotice||(next.length===1?'もう片方の金枠をタップ':'金枠の同じ牌を2つタップ');
+ box.lastElementChild.textContent=state.tutorial===2&&next.length===2&&!state.guideNotice?'上に牌がなく、左右どちらかが空くと取れます':'練習 '+(state.tutorial+1)+' / 3';
  return next.map(t=>t.id);
 }
 function drawTiles(init=false){
@@ -467,19 +469,24 @@ function drawTiles(init=false){
  for(const e of g.children){
   const t=state.all[+e.dataset.tile], alive=ids.has(t.id), free=alive&&Pai.available(t,state.live);
   e.hidden=!alive;e.classList.toggle('free',free);e.classList.toggle('blocked',alive&&!free);e.classList.toggle('selected',state.chosen===t.id);e.classList.toggle('suggested',state.suggested.includes(t.id));e.classList.toggle('guided',guide.includes(t.id));
-  e.setAttribute('aria-disabled',String(!free));e.setAttribute('aria-pressed',String(state.chosen===t.id));
-  e.tabIndex=free?0:-1;
+  const eligible=free&&(state.tutorial>=3||guide.includes(t.id)||state.chosen===t.id);
+  e.setAttribute('aria-disabled',String(!eligible));e.setAttribute('aria-pressed',String(state.chosen===t.id));
+  e.tabIndex=eligible?0:-1;
  }
  if(init){g.onclick=e=>{const t=e.target.closest('[data-tile]');if(t)choose(+t.dataset.tile);};layout();}else updatePhotoMatte();
  $('tile-count').textContent=state.live.length+'枚';
  $('undo').disabled=!state.history.length||state.cleared;$('hint').disabled=!state.live.length;
 }
-function pickFocus(){return $('grid')?.querySelector('.free:not([hidden])');}
+function pickFocus(){return $('grid')?.querySelector('.free[aria-disabled="false"]:not([hidden])');}
 function choose(id){
  if(screen!=='game'||!state.live.length)return;
  const t=state.live.find(t=>t.id===id);if(!t)return;
+ const tutorialPair=activeGuide();
+ if(tutorialPair&&!tutorialPair.some(p=>p.id===id)){
+  state.guideNotice=state.chosen==null?'まず金枠の牌をタップ':'もう片方の金枠をタップ';
+  updateGuide();say(state.guideNotice);return;
+ }
  if(!Pai.available(t,state.live)){
-  if(state.tutorial<3){state.guideNotice='この牌はまだ取れません';updateGuide();}
   say('上に牌がなく、左右どちらかが空くと取れます');return;
  }
  state.guideNotice='';
